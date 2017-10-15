@@ -1,0 +1,70 @@
+LCC-1.9-retargetable docs
+by Toshiyasu Morita
+-----------------------------------------------------
+
+These are the instructions for the data-file driven retargetable version of
+lcc. This was originally written in 1993-1994 before the backends for lcc were
+provided in the lcc package. So, I wrote my own retargetable backend code
+generator loosely inspired by BURG.
+
+This package contains lcc with my retargetable code generator and the datafiles
+for 65816 code generation originally used for the Apple //gs.
+
+dag2gs2 has been licensed under the terms of the GNU Public License;
+see the file COPYING in the gen0 directory for more information.
+
+THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+
+Build directions
+----------------------------------------------------
+
+First, build the lcc executable.
+cd to the etc subdirectory and type "make".
+Copy the a.out executable to /usr/local/bin/lcc.
+
+Next, build the rcc exectable.
+cd to gen0/vax-bsd/ and type "make".
+Copy the rcc executable to /usr/local/bin/rcc.
+
+Finally, build the dag2gs2 exectable.
+cd to gen0 and type "make".
+Copy the dag2gs2 executable to /usr/local/bin/dag2gs2.
+
+Quick overview of how this works:
+----------------------------------------------------
+
+The lcc-1.9 compiler has been modified to emit raw DAGs into a .dag file.
+This file contains the DAGs in prefix form.
+
+There is a utility called dag2gs2 which converts the .dag files into assembly.
+This dag2gs2 file is a tree-based bottom-up pattern matcher and contains has
+no code generation heuristics per se. This utility only finds patterns in the
+opt0.dag and opt1.dag which match the sequences in the .dat file and emits
+the corresponding assembly for the subtree.
+
+The opt0.dag is used at optimization level 0 and 1 (dag2gs2 -O0) and contains
+the basic DAGs required to compile a file. The -O0 mode is useful for quickly
+isolating bugs in the opt1.dag file.
+
+The opt1.dag is used at optimization level 1 (dag2gs2 -O1) and contains
+peephole optimizations which improve the code generation. This mode is used
+for full optimization.
+
+Note that this package can be easily ported to other accumulator-based
+processors (such as the 6502, Z80, etc) by simply writing new opt0.dag and
+opt1.dag datafiles.
+
+Testing
+----------------------------------------------------
+
+To test the installation, cd to gen0/vax-bsd and type:
+
+lcc -S test.c
+mv test.s test.dag
+dag2gs2 test.dag test.s
+
+This distribution is not very polished but it is fairly stable
+and has compiled a full standard C library.
+

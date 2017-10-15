@@ -1,0 +1,711 @@
+
+;
+; OPT1.DAG
+;
+; Complex dag operator file
+;
+; by Toshiyasu Morita
+;
+; Copyright (c) 1994 Toshiyasu Morita, all rights reserved
+;
+
+;
+; NOTES:
+;
+; This file contains more sophisticated dags than opt0.dag.
+;
+; There are two types of dags in this file: generic and verbatim dags.
+;
+; Generic dags look like this:
+;
+; INDIRI(ADDRLP(x))
+;
+; Generic dags can match a subtree anywhere in the tree, and must exit
+; their code fragments with the X and A registers valid.
+;
+; Verbatim dags look like this:
+;
+; ASGNI(INDIRI(ADDRLP(%0)),ADDRLP(%1))
+;
+; Verbatim dags match a whole dag tree - they don't match partials, and
+; they do not need to leave the X and A registers valid.
+;
+;
+;
+; UPCOMING FEATURES:
+;
+; Dag constraints aren't allowed yet. It'll look like this, probably:
+;
+; ASGNI(CNSTI(%0),ADDRLP(%1)),(%0 = "0")
+;     stz <%arg1
+;     stz <%arg1+2
+;
+; or possibly in RPN/Forth-ish format:
+;
+; ASGNI(CNSTI(%0),ADDRLP(%1)),(%0 "0" =)
+;     stz <%arg1
+;     stz <%arg1+2
+;
+; Constraint dags will probably be in opt2.dag.
+;
+;
+; Also, merging redundant variables aren't done yet. Right now, gen.c will
+; generate something like:
+;
+; ASGNI(ADDRLP(%0),ADDI(CNSTI(%1),INDIRI(ADDRLP(%2)))),(_i,1,_i)
+;
+; In the future, it will look like:
+;
+; ASGNI(ADDRLP(%0),ADDI(CNSTI(%1),INDIRI(ADDRLP(%0)))),(i,1)
+;
+; This will facilitate removal of spurious load/stores generated at the
+; top of a function, such as:
+;
+; ASGNI(INDIRI(ADDRLP(%0)),ADDRLP(%1)),(_i,_i)
+;
+; because it will look like:
+;
+; ASGNI(INDIRI(ADDRLP(%0)),ADDRLP(%0)),(_i)
+;
+; which is easier to match.
+;
+
+;
+; Indirect loads
+;
+
+INDIRC(ADDRLP(x))
+	sep	#$20
+	lda	<%arg0
+	rep	#$20
+	and	#$00ff
+
+INDIRC(ADDRGP(x))
+	sep	#$20
+	lda	>%arg0
+	rep	#$20
+	and	#$00ff
+
+INDIRS(ADDRLP(x))
+	lda	<%arg0
+
+INDIRS(ADDRGP(x))
+	lda	>%arg0
+
+INDIRS(INDIRP(ADDRLP(x)))
+	lda	[<%arg0]
+
+INDIRI(ADDRLP(x))
+	lda	<%arg0
+	ldx	<%arg0+2
+
+INDIRI(ADDRGP(x))
+	lda	>%arg0+2
+	tax
+	lda	>%arg0
+
+INDIRP(ADDRLP(x))
+	lda	<%arg0
+	ldx	<%arg0+2
+
+INDIRP(ADDRGP(x))
+	lda	>%arg0+2
+	tax
+	lda	>%arg0
+
+;
+; Assignments
+;
+
+ASGNC(x,ADDRLP(x))
+	%left
+	sep	#$20
+	sta	<%arg1
+	rep	#$20
+
+ASGNC(x,ADDRGP(x))
+	%left
+	sep	#$20
+	sta	>%arg1
+	rep	#$20
+
+ASGNC(x,INDIRI(ADDRLP(x)))
+	%left
+	sep	#$20
+	sta	[<%arg1]
+	rep	#$20
+
+ASGNC(x,INDIRP(ADDRLP(x)))
+	%left
+	sep	#$20
+	sta	[<%arg1]
+	rep	#$20
+
+ASGNC(CNSTC(%0),INDIRI(ADDRLP(%1)))
+	sep	#$20
+	longa	off
+	lda	#<%arg0
+	sta	[<%arg1]
+	rep	#$20
+	longa	on
+
+ASGNS(x,ADDRLP(x))
+	%left
+	sta	<%arg1
+
+ASGNS(x,ADDRGP(x))
+	%left
+	sta	>%arg1
+
+ASGNS(CNSTS(x),INDIRP(ADDRLP(x)))
+	lda	#<%arg0
+	sta	[<%arg1]
+
+ASGNI(x,ADDRLP(x))
+	%left
+	sta	<%arg1
+	stx	<%arg1+2
+
+ASGNI(x,ADDRGP(x))
+	%left
+	tay
+	sta	>%arg1
+	txa
+	sta	>%arg1+2
+	tya
+
+ASGNI(x,INDIRP(ADDRLP(x)))
+	%left
+	pha
+	sta	[<%arg1]
+	txa
+	ldy	#2
+	sta	[<%arg1],y
+	pla
+
+ASGNC(INDIRC(INDIRI(ADDRLP(x))),INDIRI(ADDRLP(x)))
+	sep	#$20
+	lda	[<%arg0]
+	sta	[<%arg1]
+	rep	#$20
+
+ASGNI(INDIRI(ADDRLP(x)),ADDRLP(x))
+	lda	<%arg0
+	ldx	<%arg0+2
+	sta	<%arg1
+	stx	<%arg1+2
+
+ASGNI(ADDI(CNSTI(%0),INDIRI(ADDRLP(%1))),ADDRLP(%2))
+	lda	<%arg1
+	clc
+	adc	#<%arg0
+	sta	<%arg2
+	lda	<%arg1+2
+	adc	#^%arg0
+	sta	<%arg2+2
+
+ASGNI(SUBI(CNSTI(%0),INDIRI(ADDRLP(%1))),ADDRLP(%2))
+	lda	<%arg1
+	sec
+	sbc	#<%arg0
+	sta	<%arg2
+	lda	<%arg1+2
+	sbc	#^%arg0
+	sta	<%arg2+2
+
+ASGNP(x,ADDRLP(x))
+	%left
+	sta	<%arg1
+	stx	<%arg1+2
+
+ASGNP(x,ADDRGP(x))
+	%left
+	pha
+	sta	>%arg1
+	txa
+	sta	>%arg1+2
+	pla
+
+ASGNP(INDIRP(ADDRGP(%0)),ADDRLP(%1))
+	lda	>%arg0
+	sta	<%arg1
+	lda	>%arg0+2
+	sta	<%arg1+2
+
+ASGNP(INDIRP(ADDRLP(%0)),ADDRGP(%1))
+	lda	<%arg0
+	sta	>%arg1
+	lda	<%arg0+2
+	sta	>%arg1+2
+
+ASGNP(CNSTP(%0),ADDRGP(%1))
+	lda	#<%arg0
+	sta	>%arg1
+	lda	#^%arg0
+	sta	>%arg1+2
+
+ASGNP(ADDRGP(%0),ADDRGP(%1))
+	lda	#<%arg0
+	sta	>%arg1
+	lda	#^%arg0
+	sta	>%arg1+2
+
+ASGNP(ADDP(CNSTI(%0),INDIRI(ADDRLP(%1))),ADDRLP(%2))
+	lda	<%arg1
+	clc
+	adc	#<%arg0
+	sta	<%arg2
+	lda	<%arg1+2
+	adc	#^%arg0
+	sta	<%arg2+2
+
+ASGNP(SUBP(CNSTI(%0),INDIRI(ADDRLP(%1))),ADDRLP(%2))
+	lda	<%arg1
+	sec
+	sbc	#<%arg0
+	sta	<%arg2
+	lda	<%arg1+2
+	sbc	#^%arg0
+	sta	<%arg2+2
+
+;
+; Boolean arithmetic ops
+;
+
+BANDU(CNSTU(x),x)
+	%right
+	and	#<%arg0
+	tay
+	txa
+	and	#^%arg0
+	tax
+	tya
+
+BORU(CNSTU(x),x)
+	%right
+	ora	#<%arg0
+	tay
+	txa
+	ora	#^%arg0
+	tax
+	tya
+
+BXORU(CNSTU(x),x)
+	%right
+	eor	#<%arg0
+	tay
+	txa
+	eor	#^%arg0
+	tax
+	tya
+
+;
+; Arithmetic ops
+;
+
+ADDI(CNSTI(x),x)
+	%right
+	clc
+	adc	#<%arg0
+	tay
+	txa
+	adc	#^%arg0
+	tax
+	tya
+
+ADDI(CNSTI(%0),INDIRI(ADDRLP(%1)))
+	lda	<%arg1
+	clc
+	adc	<%arg0
+	tay
+	lda	<%arg1+2
+	adc	<%arg0+2
+	tax
+	tya
+
+ADDP(ADDRGP(x),x)
+	%right
+	clc
+	adc	#<%arg0
+	tay
+	txa
+	adc	#^%arg0
+	tax
+	tya
+
+ADDP(CNSTI(x),x)
+	%right
+	clc
+	adc	#<%arg0
+	tay
+	txa
+	adc	#^%arg0
+	tax
+	tya
+
+ADDP(CNSTU(x),x)
+	%right
+	clc
+	adc	#<%arg0
+	tay
+	txa
+	adc	#^%arg0
+	tax
+	tya
+
+ADDP(CNSTU(%0),INDIRI(ADDRLP(%1)))
+	lda	<%arg1
+	clc
+	adc	<%arg0
+	tay
+	lda	<%arg1+2
+	adc	<%arg0+2
+	tax
+	tya
+
+ADDP(INDIRP(ADDRLP(x)),x)
+	%right
+	clc
+	adc	<%arg0
+	tay
+	txa
+	adc	<%arg0+2
+	tax
+	tya
+
+
+SUBI(CNSTI(x),x)
+	%right
+	sec
+	sbc	#<%arg0
+	tay
+	txa
+	sbc	#^%arg0
+	tax
+	tya
+
+SUBI(CNSTI(%0),INDIRI(ADDRLP(%1)))
+	lda	<%arg1
+	sec
+	sbc	<%arg0
+	tay
+	lda	<%arg1+2
+	sbc	<%arg0+2
+	tax
+	tya
+
+SUBP(CNSTU(x),x)
+	%right
+	sec
+	sbc	#<%arg0
+	tay
+	txa
+	sbc	#^%arg0
+	tax
+	tya
+
+SUBP(CNSTU(%0),INDIRI(ADDRLP(%1)))
+	lda	<%arg1
+	sec
+	sbc	<%arg0
+	tay
+	lda	<%arg1+2
+	sbc	<%arg0+2
+	tax
+	tya
+
+;
+; Jumps
+;
+
+JUMPV(ADDRGP(x))
+	jmp	%arg0
+
+;
+; Arguments
+;
+
+ARGI(CNSTI(%0))
+	pea	+(%arg0)|-16
+	pea	%arg0
+	%pushstack 4
+
+ARGI(INDIRI(ADDRLP(%0)))
+	pei	<%arg0+2
+	pei	<%arg0
+	%pushstack 4
+
+ARGI(INDIRI(ADDP(CNSTI(%0),INDIRI(ADDRLP(%1)))))
+	%alloctemp 0
+	lda	#<%arg0
+	clc
+	adc	<%arg1
+	sta	<%temp0
+	lda	#^%arg0
+	adc	<%arg1+2
+	sta	<%temp0+2
+	ldy	#2
+	lda	[<%temp0],y
+	pha
+	lda	[<%temp0]
+	pha
+	%freetemp 0
+	%pushstack 4
+
+ARGI(INDIRI(SUBP(CNSTI(%0),INDIRI(ADDRLP(%1)))))
+	%alloctemp 0
+	lda	#<%arg0
+	sec
+	sbc	<%arg1
+	sta	<%temp0
+	lda	#^%arg0
+	sbc	<%arg1+2
+	sta	<%temp0+2
+	ldy	#2
+	lda	[<%temp0],y
+	pha
+	lda	[<%temp0]
+	pha
+	%freetemp 0
+	%pushstack 4
+
+ARGP(ADDRGP(%0))
+	pea	+(%arg0)|-16
+	pea	%arg0
+	%pushstack 4
+
+ARGP(ADDRLP(%0))
+	pea	0
+	tdc
+	clc
+	adc	#<%arg0
+	pha
+	%pushstack 4
+
+ARGP(INDIRI(ADDRLP(%0)))
+	pei	<%arg0+2
+	pei	<%arg0
+	%pushstack 4
+
+ARGP(INDIRP(ADDRLP(%0)))
+	pei	<%arg0+2
+	pei	<%arg0
+	%pushstack 4
+
+ARGP(ADDP(CNSTI(%0),INDIRI(ADDRLP(%1))))
+	lda	<%arg1
+	clc
+	adc	#<%arg0
+	tay
+	lda	<%arg1+2
+	adc	#^%arg0
+	pha
+	phy
+	%pushstack 4
+
+;
+; Calls
+;
+
+CALLB(x,ADDRGP(x))
+	%left				; Push struct pointer
+	phx
+	pha
+	%pushstack 4
+	jsl	%arg1
+	%fixstack0
+
+CALLI(ADDRGP(%0))
+	jsl	%arg0
+	%fixstack0
+
+CALLI(ADDRGP(x))
+	jsl	%arg0
+	%fixstack1
+
+CALLV(ADDRGP(x))
+	jsl	%arg0
+	%fixstack0
+
+ASGNI(CALLI(ADDRGP(%0)),ADDRLP(%1))
+	jsl	%arg0
+	sta	<%arg1
+	stx	<%arg1+2
+	%fixstack0
+
+;
+; Returns
+;
+
+RETI(CNSTI(x))
+	tsc
+	clc
+	adc	#local
+	tcs
+	pld
+	lda	#<%arg0
+	ldx	#^%arg0
+	rtl
+
+RETI(CNSTU(x))
+	tsc
+	clc
+	adc	#local
+	tcs
+	pld
+	lda	#<%arg0
+	ldx	#^%arg0
+	rtl
+
+RETI(INDIRI(ADDRLP(x)))
+	ldy	<%arg0
+	ldx	<%arg0+2
+	tsc
+	clc
+	adc	#local
+	tcs
+	pld
+	tya
+	rtl
+
+RETI(CVPU(INDIRP(ADDRLP(%0))))
+	ldy	<%arg0
+	ldx	<%arg0+2
+	tsc
+	clc
+	adc	#local
+	tcs
+	pld
+	tya
+	rtl
+
+
+RETI(INDIRI(ADDRGP(x)))
+	tsc
+	clc
+	adc	#local
+	tcs
+	pld
+	lda	>%arg0+2
+	tax
+	lda	>%arg0
+	rtl
+
+; 5/10/94
+
+RETI(ADDI(CNSTI(%0),INDIRI(ADDRLP(%1))))
+	lda	#<%arg0
+	clc
+	adc	<%arg1
+	tay
+	lda	#^%arg0
+	adc	<%arg1+2
+	tax
+	tsc
+	clc
+	adc	#local
+	tcs
+	pld
+	tya
+	rtl
+
+; 5/10/94
+
+RETI(SUBI(CNSTI(%0),INDIRI(ADDRLP(%1))))
+	lda	#<%arg0
+	sec
+	sbc	<%arg1
+	tay
+	lda	#^%arg0
+	sbc	<%arg1+2
+	tax
+	tsc
+	clc
+	adc	#local
+	tcs
+	pld
+	tya
+	rtl
+
+;
+; Compares
+;
+
+NEI(CNSTI(%0),INDIRI(ADDRLP(%1)),%2)
+	lda	<%arg1
+	cmp	#<%arg0
+	bne	*+9
+	lda	<%arg1+2
+	cmp	#^%arg0
+	beq 	*+5
+	jmp	%arg2
+
+EQI(CNSTI(%0),INDIRI(ADDRLP(%1)),%2)
+	lda	<%arg1
+	cmp	#<%arg0
+	bne	*+12
+	lda	<%arg1+2
+	cmp	#^%arg0
+	bne 	*+5
+	jmp	%arg2
+
+GEI(CNSTI(%0),INDIRI(ADDRLP(%1)),%2)
+	lda	#<%arg0
+	sec
+	sbc	<%arg1
+	beq	*+17		; 2nd check
+	lda	#^%arg0
+	sbc	<%arg1+2
+	bvc	*+5
+	eor	#$8000
+	bpl	*+22		; Fall through
+	jmp	%arg2
+	lda	#^%arg0
+	sbc	<%arg1+2
+	beq	*+9		; Jump
+	bvc	*+5
+	eor	#$8000
+	bpl	*+5		; Fall through
+	jmp	%arg2
+
+GTI(CNSTI(%0),INDIRI(ADDRLP(%1)),%2)
+	lda	#<%arg0
+	sec
+	sbc	<%arg1
+	lda	#^%arg0
+	sbc	<%arg1+2
+	bvc	*+5
+	eor	#$8000
+	bpl	*+5
+	jmp	%arg2
+
+LEI(CNSTI(%0),INDIRI(ADDRLP(%1)),%2)
+	lda	#<%arg0
+	sec
+	sbc	<%arg1
+	lda	#^%arg0
+	sbc	<%arg1+2
+	bvc	*+5
+	eor	#$8000
+	bmi	*+5
+	jmp	%arg2
+
+LTI(CNSTI(%0),INDIRI(ADDRLP(%1)),%2)
+	lda	#<%arg0
+	sec
+	sbc	<%arg1
+	beq	*+17		; 2nd check
+	lda	#^%arg0
+	sbc	<%arg1+2
+	bvc	*+5
+	eor	#$8000
+	bmi	*+22		; Fall through
+	jmp	%arg2
+	lda	#^%arg0
+	sbc	<%arg1+2
+	beq	*+12		; Fall through
+	bvc	*+5
+	eor	#$8000
+	bmi	*+5		; Fall through
+	jmp	%arg2
+

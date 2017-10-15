@@ -1,0 +1,691 @@
+
+;
+; OPT0.DAG
+;
+; Basic (atomic) dag operator file
+;
+; by Toshiyasu Morita
+;
+; Copyright (c) 1994 Toshiyasu Morita, all rights reserved
+;
+
+;
+; This file has all the basic dags necessary for code generation.
+; Anything more complicated than a basic dag should be in another file,
+; depending on complexity.
+;
+;
+; DAG types:
+;
+; ADDRG: Address of a global
+; ADDRL: Address of a local
+;  CNST: Constant
+;
+;  BCOM: Bitwise complement
+;   CVC: Convert from char
+;   CVD: Convert from double
+;   CVF: Convert from float
+;   CVP: Convert from pointer
+;   CVS: Convert from short
+;   CVU: Convert from unsigned
+; INDIR: Fetch
+;   NEG: Negate
+;
+;   ADD: Addition
+;  BAND: Bitwise AND
+;   BOR: Bitwise inclusive OR
+;  BXOR: Bitwise exclusive OR
+;   DIV: Division
+;   LSH: Left shift
+;   MOD: Modulus
+;   MUL: Multiplication
+;   RSH: Right shift
+;   SUB: Subtract
+;
+;  ASGN: Assign
+;    EQ: Jump if equal
+;    NE: Jump if not equal
+;    GE: Jump if greater than or equal
+;    GT: Jump if greater than
+;    LE: Jump if less than or equal
+;    LT: Jump if less than
+;
+;   ARG: Argument
+;  CALL: Function call
+;   RET: Return from function
+;
+;  JUMP: Unconditional jump
+; LABEL: Label definition
+;
+;
+; Suffixes:
+;
+;     C: Char
+;     S: Short
+;     I: Integer
+;     U: Unsigned
+;     P: Pointer
+;     F: Float
+;     D: Double
+;     B: Structure
+;     V: Void
+;
+; So...CVCI is "convert from character to integer"
+;   ...INDIRI(ADDRLP(x)) is "fetch integer from local variable"
+;   (etc)
+;
+
+
+STARTFUNC(%0)
+	%label	start
+
+ENDFUNC(%0)
+	%label	end
+
+FLUSH()
+	%flush
+
+LABELV(%0)
+	%label	anop
+
+LINK()
+	lda	r15
+	add.l	#-local
+	sta	r15
+
+UNLK()
+	tsc
+	clc
+	adc	#local
+	tcs
+	pld
+
+;
+; Basic operators start here
+;
+; ADDRFP -> ADDRLP
+;
+; if (xxxxP && !ADDRLP)
+;     xxxxU
+;
+
+ADDRLP(x)
+	lda	r15
+	add	#%arg0
+
+ADDRGP(x)
+	lda.l	#%arg0
+
+CNSTC(x)
+	lda.b	#%arg0
+
+CNSTS(x)
+	lda.w	#%arg0
+
+CNSTI(x)
+	lda.l	#%arg0
+
+CNSTU(x)
+	lda.l	#%arg0
+
+CNSTP(x)
+	lda.l	#arg0
+
+BCOMU(x)
+	%left
+	not
+
+CVCI(x)
+	%left
+	exts.b
+
+CVCU(x)
+	%left
+	extu.b
+
+CVIC(x)
+	%left			; Nothing to do
+
+CVIS(x)
+	%left			; Nothing to do
+
+CVIU(x)
+	%left
+
+CVPU(x)
+	%left
+
+CVSI(x)
+	%left
+	exts.w
+
+CVSU(x)
+	%left
+	extu.w
+
+CVUC(x)
+	%left
+
+CVUS(x)
+	%left
+
+CVUI(x)
+	%left
+
+CVUP(x)
+	%left
+
+;
+; INDIRB should only be used with ARGB and ASGNB, I think
+;
+
+INDIRB(x)
+	%left
+
+INDIRC(x)
+	%left
+	%alloctemp 0
+	sta	%temp0
+	lda.b	@%temp0
+	%freetemp 0
+
+INDIRC(ADDRLP(x))
+	lda.b	@(%arg0,r15)
+
+INDIRS(x)
+	%left
+	%alloctemp 0
+	sta	%temp0
+	lda.w	@%temp0
+	%freetemp 0
+
+INDIRS(ADDRLP(x))
+	lda.w	@(%arg0,r15)
+
+INDIRI(x)
+	%left
+	%alloctemp 0
+	sta	%temp0
+	lda.l	@%temp0
+	%freetemp 0
+
+INDIRI(ADDRLP(x))
+	lda.l	@(%arg0,r15)
+
+INDIRP(x)
+	%left
+	%alloctemp 0
+	sta	%temp0
+	lda.l	@%temp0
+	%freetemp 0
+
+INDIRP(ADDRLP(x))
+	lda.l	@(%arg0,r15)
+
+INDIRU(x)
+	%left
+	%alloctemp 0
+	sta	<%temp0
+	stx	<%temp0+2
+	ldy	#2
+	lda	[<%temp0],y
+	tax
+	lda	[<%temp0]
+	%freetemp 0
+
+INDIRU(ADDRLP(x))
+	lda.l	@(%arg0,r15)
+
+NEGI(x)
+	%left
+	neg
+
+ADDI(x,x)
+	%left
+	%alloctemp 0
+	sta	%temp0
+	%right
+	add	%temp0
+	%freetemp 0
+
+ADDI(CNSTI(x),x)
+	%right
+	add.l	#%arg0
+
+ADDI(CNSTU(x),x)
+	%right
+	add.l	#%arg0
+
+ADDU(x,x)
+	%left
+	%alloctemp 0
+	sta	%temp0
+	%right
+	add	%temp0
+	%freetemp 0
+
+ADDU(CNSTI(x),x)
+	%right
+	add.l	#%arg0
+
+ADDU(CNSTU(x),x)
+	%right
+	add.l	#%arg0
+
+ADDP(x,x)
+	%left
+	%alloctemp 0
+	sta	%temp0
+	%right
+	add	%temp0
+	%freetemp 0
+
+ADDP(CNSTI(x),x)
+	%right
+	add.l	#%arg0
+
+ADDP(CNSTU(x),x)
+	%right
+	add.l	#%arg0
+
+BANDU(x,x)
+	%left
+	%alloctemp 0
+	sta	%temp0
+	%right
+	and	%temp0
+	%freetemp 0
+
+BANDU(CNSTI(x),x)
+	%right
+	and.l	#%arg0
+
+BANDU(CNSTU(x),x)
+	%right
+	and.l	#%arg0
+
+BORU(x,x)
+	%left
+	%alloctemp 0
+	sta	%temp0
+	%right
+	or	%temp0
+	%freetemp 0
+
+BORU(CNSTU(x),x)
+	%right
+	or.l	#%arg0
+
+BXORU(x,x)
+	%left
+	%alloctemp 0
+	sta	%temp0
+	%right
+	eor	%temp0+2
+	%freetemp 0
+
+BXORU(CNSTU(x),x)
+	%right
+	eor.l	#%arg0
+
+DIVU(x,x)
+	%left
+	%alloctemp 0
+	sta	%temp0
+	%right
+	divu	%temp0
+	%freetemp
+
+DIVI(x,x)
+	%left
+	%alloctemp 0
+	sta	%temp0
+	%right
+	divi	%temp0
+	%freetemp
+
+LSHI(x,x)
+	%left
+	%alloctemp 0
+	sta	%temp0		; LSHI(x,x) shifts
+	%right
+	lsl	%temp0
+	%freetemp 0
+
+LSHI(CNSTI(x),x)
+	%right
+	lsl	#%arg0
+	%freetemp 0
+
+LSHU(x,x)
+	%left
+	%alloctemp 0
+	sta	%temp0		; LSHU(x,x) shifts
+	%right
+	lsl	%temp0
+	%freetemp 0
+
+LSHU(CNSTI(x),x)
+	%right
+	lsl	#%arg0
+	%freetemp 0
+
+MODI(x,x)
+	%left
+	%alloctemp 0
+	sta	%temp0
+	%right
+	modi	%temp0
+	%freetemp 0
+
+MODU(x,x)
+	%left
+	%alloctemp 0
+	sta	%temp0
+	%right
+	modu	%temp0
+	%freetemp 0
+
+MULI(x,x)
+	%left
+	%alloctemp 0
+	sta	%temp0
+	%right
+	mul.l	%temp0
+	%freetemp 0
+
+MULU(x,x)
+	%left
+	%alloctemp 0
+	sta	%temp0
+	%right
+	mulu	%temp0
+	%freetemp 0
+
+RSHI(x,x)
+	%left
+	%alloctemp 0
+	sta	<%temp0			; RSHI(x,x) shifts
+	%right
+	asr	<%temp
+	%freetemp 0
+
+RSHU(x,x)
+	%left
+	%alloctemp 0
+	sta	<%temp0			; RSHI(x,x) shifts
+	%right
+	lsr	<%temp
+	%freetemp 0
+
+SUBI(x,x)
+	%left
+	%alloctemp 0
+	sta	<%temp0
+	%right
+	sub	<%temp0
+	%freetemp 0
+
+SUBU(x,x)
+	%left
+	%alloctemp 0
+	sta	<%temp0
+	%right
+	sub	<%temp0
+	%freetemp 0
+
+SUBP(x,x)
+	%left
+	%alloctemp 0
+	sta	<%temp0
+	%right
+	sub	<%temp0
+	%freetemp 0
+
+ASGNB(x,x,x)
+	%left
+	%alloctemp 0
+	sta	<%temp0
+	stx	<%temp0+2
+	%right
+	%alloctemp 1
+	sta	<%temp1
+	stx	<%temp1+2
+	ldy	#<%arg2
+	dey
+	dey
+	lda	[<%temp0],y
+	sta	[<%temp1],y
+	tya
+	bpl	*-7
+	%freetemp 1
+	%freetemp 0
+
+ASGNC(x,x)
+	%left
+	%alloctemp 0
+	sta	%temp0
+	%right
+	sta.b	@%temp0
+	%freetemp 0
+
+ASGNC(x,ADDRLP(x))
+	%left
+	sta.b	@(%arg1,r15)
+
+ASGNS(x,x)
+	%left
+	%alloctemp 0
+	sta	%temp0
+	%right
+	sta.w	@%temp0
+	%freetemp 0
+
+ASGNS(x,ADDRLP(x))
+	%left
+	sta.w	@(%arg1,r15)
+
+ASGNI(x,x)
+	%right
+	%alloctemp 0
+	sta	%temp0
+	%left
+	sta.l	@%temp0
+	%freetemp 0
+
+ASGNI(x,ADDRLP(x))
+	%left
+	sta.l	@(%arg1,r15)
+
+ASGNP(x,x)
+	%right
+	%alloctemp 0
+	sta	%temp0
+	%left
+	sta.l	@%temp0
+	%freetemp 0
+
+ASGNP(x,ADDRLP(x))
+	%left
+	sta.l	@(%arg1,r15)
+
+ASGNU(x,x)
+	%left
+	%alloctemp 0
+	sta	%temp0
+	%right
+	sta	@%temp0
+	%freetemp 0
+
+ASGNP(x,ADDRLP(x))
+	%left
+	sta.l	@(%arg1,r15)
+
+EQI(x,x,x)
+	%left
+	%alloctemp 0
+	sta	%temp0
+	%right
+	cmp	%temp0
+	beq	%arg2
+	%freetemp 0
+
+NEI(x,x,x)
+	%left
+	%alloctemp 0
+	sta	%temp0
+	%right
+	cmp	%temp0
+	bne	%arg2
+	%freetemp 0
+
+GEI(x,x,x)
+	%left
+	%alloctemp 0
+	sta	%temp0
+	%right
+	cmp	%temp0
+	bge	%arg2
+	%freetemp 0
+
+GTI(x,x,x)
+	%left
+	%alloctemp 0
+	sta	%temp0
+	%right
+	cmp	%temp0
+	bgt	%arg2
+	%freetemp 0
+
+LEI(x,x,x)
+	%left
+	%alloctemp 0
+	sta	%temp0
+	%right
+	cmp	%temp0
+	ble	%arg2
+	%freetemp 0
+
+LTI(x,x,x)
+	%left
+	%alloctemp 0
+	sta	%temp0
+	%right
+	cmp	%temp0
+	blt	%arg2
+	%freetemp 0
+
+GEU(x,x,x)
+	%left
+	%alloctemp 0
+	sta	%temp0
+	%right
+	cmp	%temp0
+	bge	%arg2
+	%freetemp 0
+
+GTU(x,x,x)
+	%left
+	%alloctemp 0
+	sta	%temp0
+	%right
+	cmp	%temp0
+	bgtu	%arg2
+	%freetemp 0
+
+LEU(x,x,x)
+	%left
+	%alloctemp 0
+	sta	%temp0
+	%right
+	cmp	%temp0
+	bleu	%arg2
+	%freetemp 0
+
+LTU(x,x,x)
+	%left
+	%alloctemp 0
+	sta	%temp0
+	%right
+	cmp	%temp0
+	bltu	%arg2
+	%freetemp 0
+
+; I don't know if this is right...
+
+ARGB(x,x)
+	%left
+	%alloctemp 0
+	sta	%temp0
+	%right
+	push.b	%temp0
+	%freetemp 0
+	%pushstack -1			; This means arg1
+
+ARGI(x)
+	%left
+	push
+	%pushstack 4
+
+ARGP(x)
+	%left
+	push
+	%pushstack 4
+
+CALLB(x,x)
+	%left				; Push struct pointer
+	push
+	%pushstack 4
+	%right
+	jsr
+	lda	r15
+	add	#%stack_depth
+	sta	r15
+	%clearstack
+
+CALLI(x)
+	%left
+	jsra
+	add.l	#%stack_depth
+	%clearstack
+
+CALLI(ADDRGP(x))
+	jsr	%arg0
+	lda	r15
+	add.l	#%stack_depth
+	sta	r15
+	%clearstack
+
+CALLV(x)
+	%left
+	jsr
+	lda	r15
+	add	#%stack_depth
+	sta	r15
+	%clearstack
+
+CALLV(ADDRGP(x))
+	jsr	%arg0
+	lda	r15
+	add.l	#%stack_depth
+	sta	r15
+	%clearstack
+
+RETI(x)
+	%left			; This will need to be modified later
+	sta	r0
+	lda	r15
+	add	#local
+	sta	r15
+	rtl
+
+RETV()
+	lda	r15
+	add.l	#local
+	sta	r15
+	rts
+
+JUMPV(x)
+	%left
+	jmp
+

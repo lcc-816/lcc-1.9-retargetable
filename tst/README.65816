@@ -1,0 +1,20 @@
+
+This is the instructions for the 65816 port of lcc.
+
+First, build the lcc executable.
+cd to the etc subdirectory and type "make".
+Copy the a.out executable to /usr/local/bin/lcc.
+
+Next, build the rcc exectable.
+cd to gen0/vax-bsd/ and type "make".
+Copy the rcc executable to /usr/local/bin/rcc.
+
+Finally, build the dag2gs2 exectable.
+cd to gen0 and type "make".
+Copy the dag2gs2 executable to /usr/local/bin/dag2gs2.
+
+To test the installation, cd to gen0/vax-bsd and type:
+
+lcc -S test.c
+mv test.s test.dag
+dag2gs2 test.dag test.s
